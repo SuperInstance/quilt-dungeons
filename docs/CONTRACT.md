@@ -1,10 +1,13 @@
-# CONTRACT v1.0.0 — the socket
+# CONTRACT v1.1.0 — the socket
 
 Every lane, script, and model that plays quilt-dungeons codes against this document.
 The contract is the socket: implement exactly this and your agent plugs in, forever.
 
 Versioning: breaking changes bump the major version in this header. Additive fields
 never break the socket (consumers must ignore unknown fields).
+
+Changelog: v1.1.0 — ADDITIVE only: §6.5 the legality mask (`legalActions`,
+`isLegalAction`). No prior section changed; existing scripts byte-reproduce.
 
 ---
 
@@ -187,6 +190,27 @@ Stepping a non-`'active'` state is a **no-op**: same state content back, `events
 
 `local[r][r]` is always `'@'`. `percepts` is pure and never consumes RNG.
 
+## 6.5. `legalActions(p)` — the typed legality mask (additive v1.1.0)
+
+```js
+legalActions(p)  // p = a percept ({local}) or a state ({grid, player})
+isLegalAction(action, p)
+```
+
+Returns the subset of `['up','down','left','right','wait']` whose target cell is
+NOT `'#'` (in ACTIONS order). `wait` is always legal. A monster cell is legal
+(bump = attack, §5). Out-of-bounds reads as `'#'` (percept padding already does
+this), so the world's edge is illegal too — **a bump is never in the mask**.
+
+- **THE MASK LAW — OFFERED, never enforced:** the mask is a typed cell scripts
+  may consult; the engine's `step` behavior is unchanged and scripts that
+  ignore it byte-reproduce. A script with no memory of walls can ask the
+  percept's local window (the fog is the law — the mask reads the same patch
+  under the lamp, nothing more).
+- Pure, RNG-free (never consumes the cursor), never mutates its input.
+- Throws `TypeError` on a shape that is neither percept nor state (fail-closed;
+  a malformed window is a bug, not a fog).
+
 ## 7. `score(state)` → receipt numbers
 
 ```js
@@ -223,6 +247,8 @@ Laws:
 - **DETERMINISTIC**: same percept-stream ⇒ same action stream. A script is a pure function
   of `(percept history, own memory)`.
 - A script sees **only** `percept` and `memory` — never the raw state. The fog is the law.
+- A script with no memory of walls can ask `legalActions(percept)` (§6.5) — the
+  typed mask cell, offered to every seat since v1.1.0.
 - If `step` throws or returns a malformed decision, the runner/coercion layer degrades to
   `'wait'` and records why; the game continues. (The game continues whether or not any
   model is reachable.)

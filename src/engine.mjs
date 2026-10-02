@@ -353,6 +353,50 @@ export function percepts(state, radius = 4) {
 }
 
 // ---------------------------------------------------------------------------
+// legalActions / isLegalAction (CONTRACT §6.5, additive since v1.1.0) — the
+// typed legality mask. THE MASK LAW: the mask is OFFERED, never enforced —
+// the engine's `step` behavior is unchanged, existing scripts ignore it and
+// byte-reproduce. A script with no memory of walls can ask the percept's
+// local window which actions are legal. Pure, RNG-free.
+//
+// Accepts either shape (duck-typed):
+//   * a percept  ({local: (2r+1) rows, '@' at center})  — the script-facing API;
+//     out-of-bounds padding is '#', so fog edges are already walls here.
+//   * a state    ({grid, player:{x,y}})                 — the engine-facing API.
+// A cardinal action is legal iff its target cell is NOT '#'. Walls and the
+// world's edge are illegal (they would emit `bump`); a monster cell IS legal
+// (bump = attack, CONTRACT §5); `wait` is always legal. The mask is returned
+// in ACTIONS order: ['up','down','left','right','wait'].
+// ---------------------------------------------------------------------------
+
+export function legalActions(p) {
+  let cell, cx, cy;
+  if (p && Array.isArray(p.local)) {
+    const rows = p.local;
+    const r = (rows.length - 1) / 2; // window radius; center is always the player
+    if (!Number.isInteger(r) || r < 1 || rows[r] == null || rows[r].length !== rows.length) {
+      throw new TypeError('legalActions: percept.local must be (2r+1) square rows with the player at center');
+    }
+    cx = r; cy = r;
+    cell = (x, y) => (y >= 0 && y < rows.length && x >= 0 && x < rows[y].length) ? rows[y][x] : '#';
+  } else if (p && Array.isArray(p.grid) && p.player) {
+    cx = p.player.x; cy = p.player.y;
+    cell = (x, y) => (y >= 0 && y < p.grid.length && x >= 0 && x < p.grid[y].length) ? p.grid[y][x] : '#';
+  } else {
+    throw new TypeError('legalActions: pass a percept ({local}) or a state ({grid, player})');
+  }
+  return Object.keys(DIRS).filter(a => {
+    if (a === 'wait') return true; // staying never bumps
+    const [dx, dy] = DIRS[a];
+    return cell(cx + dx, cy + dy) !== '#';
+  });
+}
+
+export function isLegalAction(action, p) {
+  return legalActions(p).includes(action);
+}
+
+// ---------------------------------------------------------------------------
 // score (CONTRACT §7)
 // ---------------------------------------------------------------------------
 
